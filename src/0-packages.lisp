@@ -7,7 +7,12 @@
            :compound
            :unate
            :binate
-           :schema-index))
+           :schema-index
+           :schema-ref
+           :schema-total-size
+           :define-schema
+           :schema-expand
+           :object))
 
 (in-package :dd-schema)
 
@@ -76,7 +81,7 @@
 (define-schema object (&rest children)
   (let ((children (map 'vector #'ensure-list children)))
     (iter (for c1 in-vector children with-index i)
-          (iter (for c2 in-vector children with-index j from i)
+          (iter (for c2 in-vector children with-index j from (1+ i))
                 (assert (not (equalp c1 c2))))))
   (compound children))
 

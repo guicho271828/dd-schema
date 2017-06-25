@@ -18,6 +18,14 @@
 
 ;; run test with (run! test-name) 
 
-
+(test one
+  (is (eq (schema-ref '(vector 5 (integer 255)) 4)
+          (schema-ref '(vector 5 (integer 255)) 3)))
+  (signals error
+    (schema-expand '(object (integer 255) (integer 255))))
+  (signals error
+    (schema-expand '(object (integer 255) (integer 254))))
+  (finishes
+    (schema-expand '(object (integer 255) (integer 127)))))
 
 

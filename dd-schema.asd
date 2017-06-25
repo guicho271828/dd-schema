@@ -14,7 +14,8 @@
               :arrow-macros
               :alexandria
               :iterate
-              :lisp-namespace)
+              :lisp-namespace
+              :function-cache)
  :serial t
  :components ((:file "src/0-packages"))
  :description "a higher-level helper library for CL-CUDD"
