@@ -28,15 +28,19 @@
 (define-namespace schema (function (&rest t) schema) nil
                   "Namespace for a schema expander function")
 
-(defmacro define-schema (name args &body definition)
-  "Defines a globally available (static) schema"
+(defmacro define-schema (name args &body body)
+  "Defines a globally available (static) schema. Can take several parameters.
+The name for the schema is automatically assgined to the achema returned by the definition.
+The schema is always memoized, i.e., there is a single schema under EQ for the same set of parameters.
+
+BODY can also contain a docstring and declarations."
   (let ((expander (symbolicate '%% name)))
-    (ematch definition
-      ((list* (and doc (type string)) definition)
+    (ematch body
+      ((list* (and doc (type string)) body)
        `(progn
           (setf (documentation ',name 'schema) ,doc)
           (defcached ,expander (,@args)
-            (let ((tmp (progn ,@definition)))
+            (let ((tmp (progn ,@body)))
               (setf (schema-name tmp) ',name)
               tmp))
           (setf (symbol-schema ',name)
@@ -44,13 +48,14 @@
       (_
        `(progn
           (defcached ,expander (,@args)
-            (let ((tmp (progn ,@definition)))
+            (let ((tmp (progn ,@body)))
               (setf (schema-name tmp) ',name)
               tmp))
           (setf (symbol-schema ',name)
                 (function ,expander)))))))
 
 (defun schema-expand (schema-spec)
+  "Expand a schema specifier and retrieves the corresponding schema object."
   (ematch schema-spec
     ((list* name args)
      (apply (symbol-schema name)
@@ -63,6 +68,8 @@
      schema-spec)))
 
 (defun compound (sub-schema)
+  "Helper function for instantiating a compound schema."
+  (declare (list sub-schema))
   (make-compound
    :children (map 'vector #'schema-expand sub-schema)))
 
@@ -70,15 +77,21 @@
   "a single bit"
   (leaf 1))
 (define-schema unate ()
+  "A single bit. Alias for BIT, but is more appropriate under unate algebra."
   (leaf 1))
 (define-schema binate ()
+  "Two bits for representing a binate boolean variable (true, false, unknown)"
   (leaf 2))
 (define-schema integer (high)
-  "parametrized integer family"
+  "Parametrized integer family"
   (leaf (ceiling (log high 2))))
 (define-schema vector (size sub-schema)
+  "Vector of the same schema of length SIZE."
   (compound (make-list size :initial-element sub-schema)))
-(define-schema object (&rest children)
+(define-schema structure (&rest children)
+  "Structure-like schema. Can specify multiple children, but it has an additional
+contraint such that each child schema should be unique so that they can
+be identifiable by a schema."
   (let ((children (map 'vector #'ensure-list children)))
     (iter (for c1 in-vector children with-index i)
           (iter (for c2 in-vector children with-index j from (1+ i))
@@ -86,6 +99,11 @@
   (compound children))
 
 (defun schema-total-size (schema-spec)
+  "Returns the total size of a schema. TODO: cache it.
+Example:
+
+ (schema-total-size '(structure (leaf 2) (leaf 3) (leaf 1))) -> 6
+"
   (labels ((rec (schema)
              (ematch schema
                ((leaf size)
@@ -94,8 +112,12 @@
                 (reduce #'+ children :key #'rec)))))
     (rec (schema-expand schema-spec))))
 
-(defun schema-index (schema-spec &rest indices)
-  "Returns the beginning index of the range included in the specified schema"
+(defun schema-index (schema-spec &rest specs-or-indices)
+  "Returns the beginning index of the range included in the specified schema. TODO: cache it.
+Example:
+
+ (schema-index '(structure (leaf 2) (leaf 3) (leaf 1)) 2) -> 5
+"
   (labels ((rec (schema indices)
              (ematch* (schema indices)
                ((_ nil)
@@ -121,9 +143,14 @@
                              (error "schema ~a is not a subschema of ~a !"
                                     sub-spec
                                     schema)))))))))
-    (rec (schema-expand schema-spec) indices)))
+    (rec (schema-expand schema-spec) spec-or-indice)))
 
-(defun schema-ref (schema-spec &rest specs)
+(defun schema-ref (schema-spec &rest specs-or-indices)
+  "Returns the schema in the schema tree specifed by schema-spec, 
+Example:
+
+ (schema-ref '(structure (leaf 2) (leaf 3) (leaf 1)) 2) -> (LEAF :NAME NIL :SIZE 1)
+ "
   (labels ((rec (schema specs)
              (ematch* (schema specs)
                ((_ nil)
@@ -141,4 +168,4 @@
                                   sub-spec
                                   schema))
                        more-specs))))))
-    (rec (schema-expand schema-spec) specs)))
+    (rec (schema-expand schema-spec) specs-or-indices)))
